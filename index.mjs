@@ -79,9 +79,30 @@ async function fetchNutritionalData(foodItem) {
 }
 
 async function calculateMacroData(foodItem, count, weight) {
- 
+  try {
+    const macrosData = await fetchNutritionalData(foodItem);
+    const calculatedMacros = {};
+    const factor = count ? count : weight / macrosData.single_serving_size;
+
+    if (count) {
+      calculatedMacros["count"] = count;
+    } else {
+      calculatedMacros["weight"] = weight;
+    }
+
+    for (const key in macrosData) {
+      if (key !== "single_serving_size") {
+        calculatedMacros[key] = Math.round(macrosData[key] * factor * 10) / 10;
+      }
+    }
+
+    return calculatedMacros;
+  } catch (error) {
+    console.error("Error calculating macro data:", error);
+    throw error;
+  }
 }
 
-fetchNutritionalData("chicken-breast")
+calculateMacroData("egg", 2, null)
   .then((data) => console.log("Nutritional data fetched and stored:", data))
   .catch((err) => console.error(err));
