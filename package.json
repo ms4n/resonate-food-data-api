@@ -1,0 +1,25 @@
+{
+  "name": "resonate-food-data-api",
+  "version": "1.0.0",
+  "description": "scrape food macro data from the web",
+  "main": "index.mjs",
+  "type": "module",
+  "scripts": {
+    "dev": "node index.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ms4n/resonate-food-data-api.git"
+  },
+  "author": "Sanjay M (https://github.com/ms4n)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ms4n/resonate-food-data-api/issues"
+  },
+  "homepage": "https://github.com/ms4n/resonate-food-data-api#readme",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "puppeteer": "^22.12.1"
+  }
+}
