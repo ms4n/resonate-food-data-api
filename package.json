@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/ms4n/resonate-food-data-api#readme",
   "dependencies": {
+    "@supabase/supabase-js": "^2.44.2",
     "dotenv": "^16.4.5",
     "puppeteer": "^22.12.1"
   }
