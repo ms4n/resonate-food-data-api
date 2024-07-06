@@ -1,6 +1,6 @@
 import express from "express";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import puppeteer from "puppeteer";
+import puppeteer, { Browser } from "puppeteer";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -27,6 +27,16 @@ interface FetchNutritionalDataResponse {
 const supabaseUrl: string = process.env.SUPABASE_URL!;
 const supabaseKey: string = process.env.SUPABASE_KEY!;
 const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
+
+let browser: Browser | null = null;
+
+async function initializeBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
+}
 
 async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
   try {
@@ -55,10 +65,8 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
     const nutritionalDataUrl: string = process.env.NUTRITIONAL_DATA_URL!;
     const url = `${nutritionalDataUrl}${foodItem}`;
 
-    const browser = await puppeteer.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-    const page = await browser.newPage();
+    await initializeBrowser();
+    const page = await browser!.newPage();
 
     try {
       await page.goto(url, { waitUntil: "domcontentloaded" });
@@ -149,7 +157,7 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
       console.error("Error fetching nutritional data:", error);
       throw error;
     } finally {
-      await browser.close();
+      await page.close();
     }
   } catch (error) {
     console.error("Error fetching nutritional data from Supabase:", error);
@@ -161,7 +169,7 @@ async function calculateMacroData(
   foodItem: string,
   count: number | null,
   weight: number | null
-): Promise<MacrosData> {
+): Promise<Partial<MacrosData>> {
   try {
     const macrosData = await fetchNutritionalData(foodItem);
     const calculatedMacros: Partial<MacrosData> = {};
@@ -210,6 +218,7 @@ app.get("/nutritional-info", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
+app.listen(port, async () => {
+  await initializeBrowser();
   console.log(`Server running on port ${port}`);
 });
