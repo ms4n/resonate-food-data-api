@@ -1,27 +1,47 @@
-import { createClient } from "@supabase/supabase-js";
+import express from "express";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import puppeteer from "puppeteer";
-import "dotenv/config";
+import * as dotenv from "dotenv";
 
-import { createClient } from "@supabase/supabase-js";
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+dotenv.config();
 
-async function fetchNutritionalData(foodItem) {
+interface MacrosData {
+  single_serving_size: number;
+  calories: number;
+  total_fat: number;
+  total_carbohydrates: number;
+  dietary_fiber: number;
+  protein: number;
+  [key: string]: number;
+}
+
+interface FetchNutritionalDataResponse {
+  single_serving_size: number;
+  calories: number;
+  total_fat: number;
+  total_carbohydrates: number;
+  dietary_fiber: number;
+  protein: number;
+}
+
+const supabaseUrl: string = process.env.SUPABASE_URL!;
+const supabaseKey: string = process.env.SUPABASE_KEY!;
+const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
+
+async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
   try {
-    // check if the nutritional data exists in db
     const { data: existingData, error } = await supabase
-      .from("NUTRITION_DATA")
+      .from("nutrition_data")
       .select()
       .eq("food", foodItem)
       .single();
 
-    if (error) {
+    if (error && error.code !== "PGRST116") {
+      // PGRST116 is the code for "Row not found"
       throw new Error("Error fetching data from Supabase");
     }
 
     if (existingData) {
-      console.log(`Nutritional data found in Supabase for ${foodItem}`);
       return {
         single_serving_size: existingData.single_serving_size,
         calories: existingData.calories,
@@ -32,8 +52,7 @@ async function fetchNutritionalData(foodItem) {
       };
     }
 
-    // if data doesn't exist, scrape and insert into db
-    const nutritionalDataUrl = process.env.NUTRITIONAL_DATA_URL;
+    const nutritionalDataUrl: string = process.env.NUTRITIONAL_DATA_URL!;
     const url = `${nutritionalDataUrl}${foodItem}`;
 
     const browser = await puppeteer.launch({
@@ -44,13 +63,14 @@ async function fetchNutritionalData(foodItem) {
     try {
       await page.goto(url, { waitUntil: "domcontentloaded" });
 
-      // wait for the nutrition info to be present
       await page.waitForSelector(".nf", { timeout: 10000 });
 
-      // extract text content
-      async function extractText(selector, useXPath = false) {
+      async function extractText(
+        selector: string,
+        useXPath = false
+      ): Promise<string> {
         if (useXPath) {
-          const element = await page.evaluateHandle((xpath) => {
+          const element = await page.evaluateHandle((xpath: string) => {
             const results = document.evaluate(
               xpath,
               document,
@@ -59,22 +79,26 @@ async function fetchNutritionalData(foodItem) {
               null
             );
             if (results.snapshotLength > 0) {
-              return results.snapshotItem(0).textContent.trim();
+              return results.snapshotItem(0)?.textContent?.trim() ?? "";
             }
             return null;
           }, selector);
 
-          return element ? element.jsonValue() : "Data not available";
+          return element
+            ? ((await element.jsonValue()) as string)
+            : "Data not available";
         } else {
           const element = await page.$(selector);
           return element
-            ? await page.evaluate((el) => el.textContent.trim(), element)
+            ? await page.evaluate(
+                (el: Element) => el.textContent?.trim() ?? "",
+                element
+              )
             : "Data not available";
         }
       }
 
-      // selectors for required macros
-      const macrosSelectors = {
+      const macrosSelectors: Record<string, string> = {
         single_serving_size: ".nf-serving-unit-name",
         calories: 'span.nf-pr[itemprop="calories"]',
         total_fat:
@@ -86,8 +110,7 @@ async function fetchNutritionalData(foodItem) {
         protein: '//span[contains(text(), "Protein")]/following-sibling::span',
       };
 
-      // extract all the required macros
-      const macrosData = {};
+      const macrosData: MacrosData = {} as MacrosData;
       for (const key in macrosSelectors) {
         const useXPath =
           key.includes("total_") ||
@@ -103,9 +126,8 @@ async function fetchNutritionalData(foodItem) {
         }
       }
 
-      // insert data into Supabase
       const { data, error: insertError } = await supabase
-        .from("NUTRITION_DATA")
+        .from("nutrition_data")
         .insert([
           {
             food: foodItem,
@@ -122,11 +144,10 @@ async function fetchNutritionalData(foodItem) {
         throw new Error("Error inserting data into Supabase");
       }
 
-      console.log(`Nutritional data fetched and stored for ${foodItem}`);
-
       return macrosData;
     } catch (error) {
       console.error("Error fetching nutritional data:", error);
+      throw error;
     } finally {
       await browser.close();
     }
@@ -136,16 +157,20 @@ async function fetchNutritionalData(foodItem) {
   }
 }
 
-async function calculateMacroData(foodItem, count, weight) {
+async function calculateMacroData(
+  foodItem: string,
+  count: number | null,
+  weight: number | null
+): Promise<MacrosData> {
   try {
     const macrosData = await fetchNutritionalData(foodItem);
-    const calculatedMacros = {};
-    const factor = count ? count : weight / macrosData.single_serving_size;
+    const calculatedMacros: Partial<MacrosData> = {};
+    const factor = count ? count : weight! / macrosData.single_serving_size;
 
     if (count) {
       calculatedMacros["count"] = count;
     } else {
-      calculatedMacros["weight"] = weight;
+      calculatedMacros["weight"] = weight!;
     }
 
     for (const key in macrosData) {
@@ -154,13 +179,37 @@ async function calculateMacroData(foodItem, count, weight) {
       }
     }
 
-    return calculatedMacros;
+    return calculatedMacros as MacrosData;
   } catch (error) {
     console.error("Error calculating macro data:", error);
     throw error;
   }
 }
 
-calculateMacroData("egg", 2, null)
-  .then((data) => console.log("Nutritional data fetched and stored:", data))
-  .catch((err) => console.error(err));
+const app = express();
+const port = 8000;
+
+app.get("/nutritional-info", async (req, res) => {
+  const { foodItem, count, weight } = req.query;
+
+  if (!foodItem || (!count && !weight)) {
+    return res
+      .status(400)
+      .json({ error: "Please provide foodItem and either count or weight" });
+  }
+
+  try {
+    const result = await calculateMacroData(
+      foodItem as string,
+      count ? parseInt(count as string) : null,
+      weight ? parseFloat(weight as string) : null
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Error calculating macro data" });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});

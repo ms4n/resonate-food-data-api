@@ -2,10 +2,11 @@
   "name": "resonate-food-data-api",
   "version": "1.0.0",
   "description": "scrape food macro data from the web",
-  "main": "index.mjs",
-  "type": "module",
+  "main": "index.ts",
   "scripts": {
-    "dev": "node index.mjs",
+    "build": "npx tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -21,6 +22,16 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.44.2",
     "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "puppeteer": "^22.12.1"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^8.2.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.9",
+    "@types/puppeteer": "^7.0.4",
+    "nodemon": "^3.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
   }
 }
