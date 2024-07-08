@@ -73,7 +73,7 @@ jobs:
               docker stop resonate-nutrition-info || true
               docker rm resonate-nutrition-info || true
             fi
-            docker run -d --name resonate-nutrition-info -p 80:$PORT \
+            docker run -d --name resonate-nutrition-info -p 80:8000 \
               -e PORT=$PORT \
               -e SUPABASE_URL=$SUPABASE_URL \
               -e SUPABASE_KEY=$SUPABASE_KEY \
