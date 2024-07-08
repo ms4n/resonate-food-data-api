@@ -61,7 +61,7 @@ jobs:
           EOF
 
           # Copy files to the EC2 instance
-          scp -o StrictHostKeyChecking=no -i private_key.pem -r . ubuntu@$EC2_IP_ADDRESS:/home/ubuntu/resonate-nutrition-info
+          scp -o StrictHostKeyChecking=no -i private_key.pem -r ./* ubuntu@$EC2_IP_ADDRESS:/home/ubuntu/resonate-nutrition-info/
 
           # Execute commands on the EC2 instance
           ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@$EC2_IP_ADDRESS << 'EOF'
