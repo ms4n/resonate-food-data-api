@@ -21,7 +21,7 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
       return existingData as MacrosData;
     }
 
-    const url = `${nutritionalDataUrl}${foodItem}`;
+    const url = `https://www.nutritionix.com/food/${foodItem}`;
     const browser = await getBrowserInstance();
     const page = await browser.newPage();
 

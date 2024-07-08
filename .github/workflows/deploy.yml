@@ -1,0 +1,75 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build the project
+        run: npm run build
+
+      - name: Build Docker image
+        run: docker build -t resonate-nutrition-info:latest .
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push Docker image
+        run: |
+          docker tag resonate-nutrition-info:latest sanjaym1/resonate-nutrition-info:latest
+          docker push sanjaym1/resonate-nutrition-info:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: SSH and Deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          EC2_IP_ADDRESS: ${{ secrets.EC2_IP_ADDRESS }}
+          PORT: ${{ secrets.PORT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+        run: |
+          echo "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          scp -o StrictHostKeyChecking=no -i private_key.pem Dockerfile ubuntu@$EC2_IP_ADDRESS:/home/ubuntu/resonate-nutrition-info
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@$EC2_IP_ADDRESS << 'EOF'
+            set -e  # Exit immediately if a command exits with a non-zero status.
+            if ! command -v docker &> /dev/null
+            then
+              echo "Docker is not installed. Installing Docker..."
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sh get-docker.sh
+            fi
+            cd /home/ubuntu/resonate-nutrition-info
+            docker pull sanjaym1/resonate-nutrition-info:latest
+            docker stop resonate-nutrition-info || true
+            docker rm resonate-nutrition-info || true
+            docker run -d --name resonate-nutrition-info -p 80:8000 \
+              -e PORT=$PORT \
+              -e SUPABASE_URL=$SUPABASE_URL \
+              -e SUPABASE_KEY=$SUPABASE_KEY \
+              sanjaym1/resonate-nutrition-info:latest
+          EOF
