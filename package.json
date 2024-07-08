@@ -2,11 +2,11 @@
   "name": "resonate-food-data-api",
   "version": "1.0.0",
   "description": "scrape food macro data from the web",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "scripts": {
     "build": "npx tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon index.ts",
+    "dev": "nodemon src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
