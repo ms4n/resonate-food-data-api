@@ -68,8 +68,11 @@ jobs:
             set -e  # Exit immediately if a command exits with a non-zero status.
             cd /home/ubuntu/resonate-nutrition-info
             docker pull sanjaym1/resonate-nutrition-info:latest
-            docker stop resonate-nutrition-info || true
-            docker rm resonate-nutrition-info || true
+             # Check if container exists before attempting to stop and remove
+            if docker ps -a | grep resonate-nutrition-info >/dev/null; then
+              docker stop resonate-nutrition-info || true
+              docker rm resonate-nutrition-info || true
+            fi
             docker run -d --name resonate-nutrition-info -p 80:$PORT \
               -e PORT=$PORT \
               -e SUPABASE_URL=$SUPABASE_URL \
