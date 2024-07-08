@@ -54,28 +54,24 @@ jobs:
         run: |
           echo "$SSH_PRIVATE_KEY" | tr -d '\r' > private_key.pem
           chmod 600 private_key.pem
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@$EC2_IP_ADDRESS << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@$EC2_IP_ADDRESS << EOF
             set -e  # Exit immediately if a command exits with a non-zero status.
-            # Create directory if it doesn't exist
             mkdir -p /home/ubuntu/resonate-nutrition-info
           EOF
 
-          # Copy files to the EC2 instance
           scp -o StrictHostKeyChecking=no -i private_key.pem -r ./* ubuntu@$EC2_IP_ADDRESS:/home/ubuntu/resonate-nutrition-info/
 
-          # Execute commands on the EC2 instance
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@$EC2_IP_ADDRESS << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@$EC2_IP_ADDRESS << EOF
             set -e  # Exit immediately if a command exits with a non-zero status.
             cd /home/ubuntu/resonate-nutrition-info
             docker pull sanjaym1/resonate-nutrition-info:latest
-             # Check if container exists before attempting to stop and remove
             if docker ps -a | grep resonate-nutrition-info >/dev/null; then
               docker stop resonate-nutrition-info || true
               docker rm resonate-nutrition-info || true
             fi
-            docker run -d --name resonate-nutrition-info -p 80:8000 \
-              -e PORT=$PORT \
-              -e SUPABASE_URL=$SUPABASE_URL \
-              -e SUPABASE_KEY=$SUPABASE_KEY \
+            docker run -d --name resonate-nutrition-info -p 80:${{ secrets.PORT }} \
+              -e PORT=${{ secrets.PORT }} \
+              -e SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+              -e SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} \
               sanjaym1/resonate-nutrition-info:latest
           EOF
