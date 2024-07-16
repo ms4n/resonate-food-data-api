@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { getBrowserInstance } from "../utils/puppeteerUtil";
-import { supabaseUrl, supabaseKey, nutritionalDataUrl } from "../config";
+import { supabaseUrl, supabaseKey } from "../config";
 import { MacrosData } from "../interfaces/macrosData";
 
 const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
@@ -9,7 +9,7 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
   try {
     const { data: existingData, error } = await supabase
       .from("nutrition_data")
-      .select()
+      .select("*")
       .eq("food", foodItem)
       .single();
 
@@ -90,9 +90,11 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
         }
       }
 
+      macrosData["food"] = foodItem;
+
       const { error: insertError } = await supabase
         .from("nutrition_data")
-        .insert([{ food: foodItem, ...macrosData }]);
+        .insert([{ ...macrosData }]);
 
       if (insertError) {
         throw new Error("Error inserting data into Supabase");
@@ -118,7 +120,8 @@ async function calculateMacroData(
 ): Promise<Partial<MacrosData>> {
   try {
     const macrosData = await fetchNutritionalData(foodItem);
-    const calculatedMacros: Partial<MacrosData> = {};
+
+    const calculatedMacros: Partial<MacrosData> = { food: macrosData.food };
     const factor = count ? count : weight! / macrosData.single_serving_size;
 
     if (count) {
@@ -128,8 +131,10 @@ async function calculateMacroData(
     }
 
     for (const key in macrosData) {
-      if (key !== "single_serving_size") {
-        calculatedMacros[key] = Math.round(macrosData[key] * factor * 10) / 10;
+      if (key !== "single_serving_size" && key !== "food") {
+        calculatedMacros[key] = parseFloat(
+          ((macrosData[key] as number) * factor).toFixed(2)
+        );
       }
     }
 
