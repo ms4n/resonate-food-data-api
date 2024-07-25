@@ -26,79 +26,71 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
     const page = await browser.newPage();
 
     try {
+      // Request interception to block unnecessary resources
+      await page.setRequestInterception(true);
+      page.on("request", (req) => {
+        ["image", "stylesheet", "font"].includes(req.resourceType())
+          ? req.abort()
+          : req.continue();
+      });
+
       await page.goto(url, { waitUntil: "domcontentloaded" });
       await page.waitForSelector(".nf", { timeout: 10000 });
 
-      async function extractText(
-        selector: string,
-        useXPath = false
-      ): Promise<string> {
-        if (useXPath) {
-          const element = await page.evaluateHandle((xpath: string) => {
-            const results = document.evaluate(
-              xpath,
-              document,
-              null,
-              XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
-              null
-            );
-            if (results.snapshotLength > 0) {
-              return results.snapshotItem(0)?.textContent?.trim() ?? "";
-            }
-            return null;
-          }, selector);
-
-          return element
-            ? ((await element.jsonValue()) as string)
-            : "Data not available";
-        } else {
-          const element = await page.$(selector);
-          return element
-            ? await page.evaluate(
-                (el: Element) => el.textContent?.trim() ?? "",
-                element
-              )
-            : "Data not available";
+      // Extract all food macro data
+      const macrosData: MacrosData = await page.evaluate(() => {
+        const nfElement = document.querySelector(".nf");
+        if (!nfElement) {
+          throw new Error("Nutrition facts element not found");
         }
-      }
 
-      const macrosSelectors: Record<string, string> = {
-        single_serving_size: ".nf-serving-unit-name",
-        calories: 'span.nf-pr[itemprop="calories"]',
-        total_fat:
-          '//span[contains(text(), "Total Fat")]/following-sibling::span',
-        total_carbohydrates:
-          '//span[contains(text(), "Total Carbohydrates")]/following-sibling::span',
-        dietary_fiber:
-          '//span[contains(text(), "Dietary Fiber")]/following-sibling::span',
-        protein: '//span[contains(text(), "Protein")]/following-sibling::span',
-      };
+        const parseFloat = (value: string): number =>
+          Number(value.match(/\d+(\.\d+)?/)?.[0] ?? 0);
 
-      const macrosData: MacrosData = {} as MacrosData;
-      for (const key in macrosSelectors) {
-        const useXPath =
-          key.includes("total_") ||
-          key === "dietary_fiber" ||
-          key === "protein";
-        const valueText = await extractText(macrosSelectors[key], useXPath);
+        const getData = (selector: string): string =>
+          nfElement.querySelector(selector)?.textContent?.trim() ??
+          "Data not available";
 
-        if (key === "single_serving_size") {
-          const servingSize = parseFloat(valueText.split("(")[1].split("g")[0]);
-          macrosData[key] = servingSize;
-        } else {
-          macrosData[key] = parseFloat(valueText);
-        }
-      }
+        const servingUnitText =
+          nfElement
+            .querySelector(".nf-serving-unit-name")
+            ?.childNodes[0].textContent?.trim()
+            .replace(/[\n\t]+/g, "")
+            .replace(/\s*\($/, "") ?? "";
 
-      macrosData["food"] = foodItem;
+        const quantity = parseFloat(
+          (
+            nfElement.querySelector(
+              "input.nf-unitQuantityBox"
+            ) as HTMLInputElement
+          )?.value ?? "1"
+        );
 
-      const { error: insertError } = await supabase
-        .from("nutrition_data")
-        .insert([{ ...macrosData }]);
+        return {
+          food: document.title.split("Calories in ")[1]?.trim(),
+          singleServingSize: parseFloat(
+            getData('span[itemprop="servingSize"]')
+          ),
+          quantity: quantity,
+          quantityUnit: servingUnitText,
+          calories: parseFloat(getData('span.nf-pr[itemprop="calories"]')),
+          totalFat: parseFloat(getData('span[itemprop="fatContent"]')),
+          totalCarbohydrates: parseFloat(
+            getData('span[itemprop="carbohydrateContent"]')
+          ),
+          dietaryFiber: parseFloat(getData('span[itemprop="fiberContent"]')),
+          protein: parseFloat(getData('span[itemprop="proteinContent"]')),
+        } as MacrosData;
+      });
 
-      if (insertError) {
-        throw new Error("Error inserting data into Supabase");
-      }
+      //  Insert data into Supabase
+      // const { error: insertError } = await supabase
+      //   .from("nutrition_data")
+      //   .upsert([macrosData]);
+
+      // if (insertError) {
+      //   throw new Error("Error inserting data into Supabase");
+      // }
 
       return macrosData;
     } catch (error) {
@@ -121,24 +113,27 @@ async function calculateMacroData(
   try {
     const macrosData = await fetchNutritionalData(foodItem);
 
-    const calculatedMacros: Partial<MacrosData> = { food: macrosData.food };
-    const factor = count ? count : weight! / macrosData.single_serving_size;
+    // const calculatedMacros: Partial<MacrosData> = {
+    //   food: macrosData.food,
+    //   singleServingSize: macrosData.singleServingSize,
+    // };
+    // const factor = count ? count : weight! / macrosData.singleServingSize;
 
-    if (count) {
-      calculatedMacros["count"] = count;
-    } else {
-      calculatedMacros["weight"] = weight!;
-    }
+    // if (count) {
+    //   calculatedMacros["count"] = count;
+    // } else {
+    //   calculatedMacros["weight"] = weight!;
+    // }
 
-    for (const key in macrosData) {
-      if (key !== "single_serving_size" && key !== "food") {
-        calculatedMacros[key] = parseFloat(
-          ((macrosData[key] as number) * factor).toFixed(2)
-        );
-      }
-    }
+    // for (const key in macrosData) {
+    //   if (key !== "singleServingSize" && key !== "food") {
+    //     calculatedMacros[key] = parseFloat(
+    //       ((macrosData[key] as number) * factor).toFixed(2)
+    //     );
+    //   }
+    // }
 
-    return calculatedMacros;
+    return macrosData;
   } catch (error) {
     console.error("Error calculating macro data:", error);
     throw error;

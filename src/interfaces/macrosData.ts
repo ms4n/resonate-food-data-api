@@ -1,10 +1,12 @@
 export interface MacrosData {
-  single_serving_size: number;
   food: string;
+  singleServingSize: number;
+  quantity: number;
+  quantityUnit: string;
   calories: number;
-  total_fat: number;
-  total_carbohydrates: number;
-  dietary_fiber: number;
+  totalFat: number;
+  totalCarbohydrates: number;
+  dietaryFiber: number;
   protein: number;
   [key: string]: number | string;
 }
