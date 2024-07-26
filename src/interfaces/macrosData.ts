@@ -1,6 +1,9 @@
 export interface MacrosData {
+  food_id: string;
+  food_name: string;
   single_serving_size: number;
-  food: string;
+  quantity: number;
+  quantity_unit: string;
   calories: number;
   total_fat: number;
   total_carbohydrates: number;
