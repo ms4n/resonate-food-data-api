@@ -1,23 +1,17 @@
 import { Request, Response } from "express";
-import { calculateMacroData } from "../services/nutritionalService";
+import { fetchNutritionalData } from "../services/nutritionalService";
 
 export async function getNutritionalInfo(req: Request, res: Response) {
-  const { foodItem, count, weight } = req.query;
+  const foodItem = req.query.foodItem;
 
-  if (!foodItem || (!count && !weight)) {
-    return res
-      .status(400)
-      .json({ error: "Please provide foodItem and either count or weight" });
+  if (!foodItem) {
+    return res.status(400).json({ error: "Please provide foodItem" });
   }
 
   try {
-    const result = await calculateMacroData(
-      foodItem as string,
-      count ? parseInt(count as string) : null,
-      weight ? parseFloat(weight as string) : null
-    );
+    const result = await fetchNutritionalData(foodItem as string);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Error calculating macro data" });
+    res.status(500).json({ error: "Error fetching/scraping nutritional data" });
   }
 }

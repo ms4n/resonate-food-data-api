@@ -10,7 +10,7 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
     const { data: existingData, error } = await supabase
       .from("nutrition_data")
       .select("*")
-      .eq("food", foodItem)
+      .eq("food_id", foodItem)
       .single();
 
     if (error && error.code !== "PGRST116") {
@@ -38,7 +38,7 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
       await page.waitForSelector(".nf", { timeout: 10000 });
 
       // Extract all food macro data
-      const macrosData: MacrosData = await page.evaluate(() => {
+      const macrosData: MacrosData = await page.evaluate((foodItem) => {
         const nfElement = document.querySelector(".nf");
         if (!nfElement) {
           throw new Error("Nutrition facts element not found");
@@ -67,34 +67,49 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
         );
 
         return {
-          food: document.title.split("Calories in ")[1]?.trim(),
-          singleServingSize: parseFloat(
+          food_id: foodItem,
+          food_name: document.title.split("Calories in ")[1]?.trim(),
+          single_serving_size: parseFloat(
             getData('span[itemprop="servingSize"]')
           ),
           quantity: quantity,
-          quantityUnit: servingUnitText,
+          quantity_unit: servingUnitText,
           calories: parseFloat(getData('span.nf-pr[itemprop="calories"]')),
-          totalFat: parseFloat(getData('span[itemprop="fatContent"]')),
-          totalCarbohydrates: parseFloat(
+          total_fat: parseFloat(getData('span[itemprop="fatContent"]')),
+          total_carbohydrates: parseFloat(
             getData('span[itemprop="carbohydrateContent"]')
           ),
-          dietaryFiber: parseFloat(getData('span[itemprop="fiberContent"]')),
+          dietary_fiber: parseFloat(getData('span[itemprop="fiberContent"]')),
           protein: parseFloat(getData('span[itemprop="proteinContent"]')),
         } as MacrosData;
-      });
+      }, foodItem);
 
       //  Insert data into Supabase
-      // const { error: insertError } = await supabase
-      //   .from("nutrition_data")
-      //   .upsert([macrosData]);
+      const { error: insertError } = await supabase
+        .from("nutrition_data")
+        .upsert([
+          {
+            food_id: macrosData.food_id,
+            food_name: macrosData.food_name,
+            single_serving_size: macrosData.single_serving_size,
+            quantity: macrosData.quantity,
+            quantity_unit: macrosData.quantity_unit,
+            calories: macrosData.calories,
+            total_fat: macrosData.total_fat,
+            total_carbohydrates: macrosData.total_carbohydrates,
+            dietary_fiber: macrosData.dietary_fiber,
+            protein: macrosData.protein,
+          },
+        ]);
 
-      // if (insertError) {
-      //   throw new Error("Error inserting data into Supabase");
-      // }
+      if (insertError) {
+        console.error(insertError);
+        throw new Error("Error inserting data into Supabase");
+      }
 
       return macrosData;
     } catch (error) {
-      console.error("Error fetching nutritional data:", error);
+      console.error("Error fetching/scraping nutritional data:", error);
       throw error;
     } finally {
       await page.close();
@@ -105,39 +120,4 @@ async function fetchNutritionalData(foodItem: string): Promise<MacrosData> {
   }
 }
 
-async function calculateMacroData(
-  foodItem: string,
-  count: number | null,
-  weight: number | null
-): Promise<Partial<MacrosData>> {
-  try {
-    const macrosData = await fetchNutritionalData(foodItem);
-
-    // const calculatedMacros: Partial<MacrosData> = {
-    //   food: macrosData.food,
-    //   singleServingSize: macrosData.singleServingSize,
-    // };
-    // const factor = count ? count : weight! / macrosData.singleServingSize;
-
-    // if (count) {
-    //   calculatedMacros["count"] = count;
-    // } else {
-    //   calculatedMacros["weight"] = weight!;
-    // }
-
-    // for (const key in macrosData) {
-    //   if (key !== "singleServingSize" && key !== "food") {
-    //     calculatedMacros[key] = parseFloat(
-    //       ((macrosData[key] as number) * factor).toFixed(2)
-    //     );
-    //   }
-    // }
-
-    return macrosData;
-  } catch (error) {
-    console.error("Error calculating macro data:", error);
-    throw error;
-  }
-}
-
-export { calculateMacroData };
+export { fetchNutritionalData };
